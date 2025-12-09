@@ -1,0 +1,79 @@
+from zipfile import ZipFile
+from pathlib import Path
+
+base = Path("/mnt/data/adega-premium-pdv")
+public = base / "public"
+public.mkdir(parents=True, exist_ok=True)
+
+(base / "package.json").write_text("""{
+  "name": "adega-premium-pdv",
+  "version": "1.0.0",
+  "description": "PDV online Adega Premium",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^8.0.0",
+    "express": "^4.18.2",
+    "body-parser": "^1.20.2",
+    "cors": "^2.8.5"
+  }
+}""", encoding="utf-8")
+
+(base / "db.js").write_text("""const Database = require('better-sqlite3');
+const db = new Database('data.sqlite');
+
+db.exec(`
+CREATE TABLE IF NOT EXISTS products (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT,
+  price REAL,
+  stock INTEGER
+);
+CREATE TABLE IF NOT EXISTS sales (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  total REAL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+`);
+module.exports = db;
+""", encoding="utf-8")
+
+(base / "server.js").write_text("""const express = require('express');
+const bodyParser = require('body-parser');
+const db = require('./db');
+const app = express();
+
+app.use(bodyParser.json());
+app.use(express.static('public'));
+
+app.get('/api/products', (req,res)=>{
+  res.json(db.prepare('SELECT * FROM products').all());
+});
+
+app.post('/api/products', (req,res)=>{
+  const {name,price,stock} = req.body;
+  db.prepare('INSERT INTO products(name,price,stock) VALUES (?,?,?)').run(name,price,stock);
+  res.json({ok:true});
+});
+
+app.listen(process.env.PORT || 3000);
+""", encoding="utf-8")
+
+(public / "index.html").write_text("""<!DOCTYPE html>
+<html>
+<head><title>Adega Premium PDV</title></head>
+<body>
+<h1>Adega Premium PDV</h1>
+<p>Sistema online funcionando</p>
+</body>
+</html>
+""", encoding="utf-8")
+
+zip_path = Path("/mnt/data/adega-premium-pdv.zip")
+with ZipFile(zip_path, "w") as zipf:
+    for file in base.rglob("*"):
+        zipf.write(file, file.relative_to(base.parent))
+
+zip_path
